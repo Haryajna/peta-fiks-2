@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Pelacak Rumah Sakit Terdekat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-compass/dist/leaflet-compass.css"/>
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    #map {
+      height: 100vh;
+      width: 100vw;
+      touch-action: pan-x pan-y;
+    }
+
+    .leaflet-control-zoom {
+      display: none;
+    }
+
+    #tombol {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      right: 10px;
+      z-index: 999;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+      font-size: 14px;
+      width: 250px;
+    }
+
+    #showPanelBtn {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 998;
+      background-color: #2ecc71;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      display: none;
+    }
+
+    #headerLogo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    #headerLogo img {
+      height: 40px;
+      width: 40px;
+      object-fit: contain;
+      border-radius: 8px;
+    }
+
+    #headerLogo h2 {
+      font-size: 16px;
+      margin: 0;
+      color: #007bff;
+      font-weight: 600;
+      flex-grow: 1;
+    }
+
+    #lacakBtn, #openTabBtn, #modeBtn {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    #modeBtn {
+      background-color: #f1c40f;
+    }
+
+    @media (max-width: 600px) {
+      #tombol {
+        width: 100%;
+        left: 0;
+        right: 0;
+        bottom: 10px;
+        position: fixed;
+        border-radius: 0;
+      }
+
+      #showPanelBtn {
+        font-size: 12px;
+        padding: 8px;
+      }
+
+      #headerLogo {
+        justify-content: center;
+        gap: 5px;
+      }
+
+      #headerLogo h2 {
+        font-size: 14px;
+      }
+
+      #lacakBtn, #openTabBtn, #modeBtn {
+        font-size: 12px;
+        padding: 8px;
+      }
+    }
+
+    body.dark-mode {
+      background-color: #2c3e50;
+      color: white;
+    }
+
+    #tombol.dark-mode {
+      background: #34495e;
+    }
+
+    #headerLogo h2.dark-mode {
+      color: #f39c12;
+    }
+
+    #lacakBtn.dark-mode, #openTabBtn.dark-mode, #modeBtn.dark-mode {
+      background-color: #f39c12;
+    }
+
+    #rumahSakitList {
+      max-height: 200px;
+      overflow-y: auto;
+      margin-top: 15px;
+    }
+
+    .rumahSakitItem {
+      background-color: #ecf0f1;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .rumahSakitItem:hover {
+      background-color: #bdc3c7;
+    }
+  </style>
+</head>
+<body>
+  <div id="tombol">
+    <div id="headerLogo">
+      <img src="https://i.postimg.cc/HncHwVKh/LOGO-SIPRE-KADER-bulat.png" alt="Logo">
+      <h2>SiPre-KaDer (Pelacak RS)</h2>
+    </div>
+    <button id="lacakBtn" onclick="mulaiPelacakan()">Mulai Pelacakan Lokasi</button>
+    <p id="info">Klik tombol untuk melacak rumah sakit terdekat</p>
+    <button id="openTabBtn" onclick="bukaTabBaru()" style="display:none;">🔗 Buka di Laman Baru</button>
+    <button id="modeBtn" onclick="toggleMode()">Ubah ke Mode Gelap</button>
+    <button onclick="togglePanel()">Sembunyikan Panel</button>
+    <div id="rumahSakitList" style="display:none;">
+      <h3>Daftar Rumah Sakit:</h3>
+      <div id="listItems"></div>
+    </div>
+  </div>
+
+  <button id="showPanelBtn" onclick="tampilkanPanel()">Tampilkan Panel</button>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+  <script src="https://unpkg.com/leaflet-compass/dist/leaflet-compass.min.js"></script>
+
+  <script>
+    const map = L.map('map', { zoomControl: false }).setView([-2.5, 118], 5);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    const compass = new L.Control.Compass({ autoActive: true, showDigit: true });
+    map.addControl(compass);
+
+    let markerPengguna = null;
+    let routing = null;
+    let watchId = null;
+    let lokasiSebelumnya = null;
+    let sudahDiSetView = false;
+    let rumahSakitData = [];
+
+    if (window !== window.parent) {
+      document.getElementById('info').textContent = "Pelacakan lokasi tidak tersedia di mode embed. Silakan buka di tab baru.";
+      document.getElementById('lacakBtn').disabled = true;
+      document.getElementById('openTabBtn').style.display = "inline-block";
+    }
+
+    function bukaTabBaru() {
+      window.open(window.location.href, '_blank');
+    }
+
+    function toggleMode() {
+      document.body.classList.toggle('dark-mode');
+      document.getElementById('tombol').classList.toggle('dark-mode');
+      document.getElementById('headerLogo').classList.toggle('dark-mode');
+      document.getElementById('modeBtn').textContent = document.body.classList.contains('dark-mode') ? 'Ubah ke Mode Terang' : 'Ubah ke Mode Gelap';
+    }
+
+    function togglePanel() {
+      const panel = document.getElementById('tombol');
+      const showBtn = document.getElementById('showPanelBtn');
+
+      panel.style.display = 'none';
+      showBtn.style.display = 'block';
+    }
+
+    function tampilkanPanel() {
+      const panel = document.getElementById('tombol');
+      const showBtn = document.getElementById('showPanelBtn');
+
+      panel.style.display = 'block';
+      showBtn.style.display = 'none';
+    }
+
+    function mulaiPelacakan() {
+      if (!navigator.geolocation) {
+        alert("Browser tidak mendukung geolokasi.");
+        return;
+      }
+
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+
+      watchId = navigator.geolocation.watchPosition(pos => {
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+
+        if (markerPengguna) map.removeLayer(markerPengguna);
+
+        markerPengguna = L.marker([lat, lon]).addTo(map)
+          .bindPopup("Lokasi Anda").openPopup();
+
+        if (!sudahDiSetView) {
+          map.setView([lat, lon], 14);
+          sudahDiSetView = true;
+        }
+
+        if (!lokasiSebelumnya || hitungJarak(lat, lon, lokasiSebelumnya.lat, lokasiSebelumnya.lon) > 0.2) {
+          lokasiSebelumnya = { lat, lon };
+          document.getElementById('info').textContent = "Mencari rumah sakit terdekat...";
+          cariRumahSakit(lat, lon);
+        }
+      }, err => {
+        alert("Gagal mendapatkan lokasi: " + err.message);
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 5000
+      });
+    }
+
+    function cariRumahSakit(lat, lon) {
+      const radius = 5000;
+      const query = `
+        [out:json];
+        (
+          node["amenity"="hospital"](around:${radius},${lat},${lon});
+          way["amenity"="hospital"](around:${radius},${lat},${lon});
+          relation["amenity"="hospital"](around:${radius},${lat},${lon});
+        );
+        out center;
+      `;
+
+      fetch("https://overpass-api.de/api/interpreter", {
+        method: "POST",
+        body: query
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (!data.elements.length) {
+          document.getElementById('info').textContent = "Tidak ada rumah sakit dalam radius 5 km.";
+          return;
+        }
+
+        rumahSakitData = [];
+        let rumahSakitTerdekat = null;
+        let jarakTerdekat = Infinity;
+
+        data.elements.forEach(el => {
+          const latRS = el.lat || (el.center && el.center.lat);
+          const lonRS = el.lon || (el.center && el.center.lon);
+          const nama = el.tags && el.tags.name ? el.tags.name : "Rumah Sakit";
+
+          const jarak = hitungJarak(lat, lon, latRS, lonRS);
+
+          if (jarak < jarakTerdekat) {
+            jarakTerdekat = jarak;
+            rumahSakitTerdekat = { lat: latRS, lon: lonRS, nama };
+          }
+
+          rumahSakitData.push({ lat: latRS, lon: lonRS, nama, jarak });
+        });
+
+        document.getElementById('info').textContent = `Terdekat: ${rumahSakitTerdekat.nama} (${jarakTerdekat.toFixed(2)} km)`;
+
+        tampilkanDaftarRumahSakit();
+        tampilkanRute(lat, lon, rumahSakitTerdekat.lat, rumahSakitTerdekat.lon);
+      })
+      .catch(err => {
+        console.error(err);
+        document.getElementById('info').textContent = "Terjadi kesalahan saat memuat rumah sakit.";
+      });
+    }
+
+    function tampilkanDaftarRumahSakit() {
+      const listContainer = document.getElementById('listItems');
+      listContainer.innerHTML = '';
+
+      rumahSakitData.forEach(rumahSakit => {
+        const div = document.createElement('div');
+        div.classList.add('rumahSakitItem');
+        div.innerHTML = `
+          <strong>${rumahSakit.nama}</strong><br>
+          Jarak: ${rumahSakit.jarak.toFixed(2)} km<br>
+          <button onclick="tampilkanRute(${markerPengguna.getLatLng().lat}, ${markerPengguna.getLatLng().lng}, ${rumahSakit.lat}, ${rumahSakit.lon})">Lihat Rute</button>
+        `;
+        listContainer.appendChild(div);
+      });
+
+      document.getElementById('rumahSakitList').style.display = 'block';
+    }
+
+    function tampilkanRute(lat1, lon1, lat2, lon2) {
+      if (routing) map.removeControl(routing);
+
+      routing = L.Routing.control({
+        waypoints: [
+          L.latLng(lat1, lon1),
+          L.latLng(lat2, lon2)
+        ],
+        routeWhileDragging: false,
+        draggableWaypoints: false,
+        createMarker: () => null
+      }).addTo(map);
+    }
+
+    function hitungJarak(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a =
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) *
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      return R * c;
+    }
+  </script>
+</body>
+</html>

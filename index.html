@@ -33,7 +33,7 @@
       left: 10px;
       right: 10px;
       z-index: 999;
-      background: white;
+      background: rgb(255, 255, 255);
       padding: 10px;
       border-radius: 8px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.3);
@@ -82,7 +82,7 @@
       display: block;
       width: 100%;
       margin-top: 8px;
-      background-color: #007bff;
+      background-color: #029cdd;
       color: white;
       border: none;
       padding: 10px;
@@ -156,6 +156,29 @@
       cursor: pointer;
     }
 
+    .tombol-rute {
+      margin-top: 5px;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .tombol-panel {
+      background-color: #27ae60;
+      color: white;
+      border: none;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+
+
     .rumahSakitItem:hover {
       background-color: #bdc3c7;
     }
@@ -164,14 +187,29 @@
 <body>
   <div id="tombol">
     <div id="headerLogo">
-      <img src="https://i.postimg.cc/HncHwVKh/LOGO-SIPRE-KADER-bulat.png" alt="Logo">
-      <h2>SiPre-KaDer (Pelacak RS)</h2>
+      <img src="https://i.postimg.cc/jS2KHL8R/APRESDA.png" alt="Logo">
+      <h2>APRESDA (Pelacak RS)</h2>
     </div>
     <button id="lacakBtn" onclick="mulaiPelacakan()">Mulai Pelacakan Lokasi</button>
     <p id="info">Klik tombol untuk melacak rumah sakit terdekat</p>
     <button id="openTabBtn" onclick="bukaTabBaru()" style="display:none;">🔗 Buka di Laman Baru</button>
     <button id="modeBtn" onclick="toggleMode()">Ubah ke Mode Gelap</button><br>
-    <button onclick="togglePanel()">Sembunyikan Panel</button>
+    <button class="tombol-panel" onclick="togglePanel()">Sembunyikan Panel</button>
+    <button id="tampilkanPanelRuteBtn" style="
+    display: none;
+    position: absolute;
+    bottom: 2px;
+    left: 10px;
+    z-index: 1000;
+    padding: 8px 12px;
+    font-size: 13px;
+    background-color: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+  ">Tampilkan Panel Rute</button>
+
     <div id="rumahSakitList" style="display:none;">
       <h3>Daftar Rumah Sakit:</h3>
       <div id="listItems"></div>
@@ -334,9 +372,10 @@
         const div = document.createElement('div');
         div.classList.add('rumahSakitItem');
         div.innerHTML = `
-          <strong>${rumahSakit.nama}</strong><br>
-          Jarak: ${rumahSakit.jarak.toFixed(2)} km<br>
-          <button onclick="tampilkanRute(${markerPengguna.getLatLng().lat}, ${markerPengguna.getLatLng().lng}, ${rumahSakit.lat}, ${rumahSakit.lon})">Lihat Rute</button>
+        <strong>${rumahSakit.nama}</strong><br>
+        Jarak: ${rumahSakit.jarak.toFixed(2)} km<br>
+        <button class="tombol-rute" onclick="tampilkanRute(${markerPengguna.getLatLng().lat}, ${markerPengguna.getLatLng().lng}, ${rumahSakit.lat}, ${rumahSakit.lon})">Lihat Rute</button>
+
         `;
         listContainer.appendChild(div);
       });
@@ -345,18 +384,59 @@
     }
 
     function tampilkanRute(lat1, lon1, lat2, lon2) {
-      if (routing) map.removeControl(routing);
+  if (routing) map.removeControl(routing);
 
-      routing = L.Routing.control({
-        waypoints: [
-          L.latLng(lat1, lon1),
-          L.latLng(lat2, lon2)
-        ],
-        routeWhileDragging: false,
-        draggableWaypoints: false,
-        createMarker: () => null
-      }).addTo(map);
-    }
+  routing = L.Routing.control({
+    waypoints: [
+      L.latLng(lat1, lon1),
+      L.latLng(lat2, lon2)
+    ],
+    routeWhileDragging: false,
+    draggableWaypoints: false,
+    createMarker: () => null
+  }).addTo(map);
+
+  routing.on('routeselected', function () {
+    setTimeout(() => {
+      const container = document.querySelector('.leaflet-routing-container');
+      const toggleBtn = document.getElementById('tampilkanPanelRuteBtn');
+
+      if (container && !document.getElementById('kecilkanPanelRute')) {
+        const btn = document.createElement('button');
+        btn.id = 'kecilkanPanelRute';
+        btn.textContent = '×';
+        btn.title = 'Kecilkan Panel Rute';
+        btn.style.position = 'absolute';
+        btn.style.top = '5px';
+        btn.style.right = '8px';
+        btn.style.background = '#e74c3c';
+        btn.style.color = 'white';
+        btn.style.border = 'none';
+        btn.style.borderRadius = '4px';
+        btn.style.cursor = 'pointer';
+        btn.style.padding = '2px 8px';
+        btn.style.fontSize = '16px';
+
+        btn.onclick = () => {
+          container.style.display = 'none';
+          toggleBtn.style.display = 'block';
+        };
+
+        container.style.position = 'relative';
+        container.appendChild(btn);
+      }
+
+      if (container) {
+        container.style.display = 'block';
+      }
+
+      if (toggleBtn) {
+        toggleBtn.style.display = 'none';
+      }
+    }, 300);
+  });
+}
+
 
     function hitungJarak(lat1, lon1, lat2, lon2) {
       const R = 6371;
@@ -369,6 +449,15 @@
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
       return R * c;
     }
+
+    document.getElementById('tampilkanPanelRuteBtn').addEventListener('click', () => {
+  const container = document.querySelector('.leaflet-routing-container');
+  if (container) {
+    container.style.display = 'block';
+    document.getElementById('tampilkanPanelRuteBtn').style.display = 'none';
+  }
+});
+
   </script>
 </body>
 </html>
